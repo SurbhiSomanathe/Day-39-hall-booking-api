@@ -1,226 +1,145 @@
+require("dotenv").config();
 const express = require("express");
+const cors = require("cors");
+const bodyParser = require("body-parser");
+const uniqid = require('uniqid');
+
 const app = express();
-const mongodb = require("mongodb");
-const mongodbclient = mongodb.MongoClient;
-const dotenv = require("dotenv").config();
-const URL = process.env.DB;
+app.use(cors());
+app.use(bodyParser.json());
+const port = process.env.PORT || 3000;
 
-app.use(express.json());
+app.listen(port, () => console.log(`Your app is running with ${port}`));
 
-app.get("/", async function (req, res) {
-  res.send("Server is running Sucessfully");
+let rooms = [];
+let roomNo = 100;
+let bookings =[];
+let date_regex = /^(0[1-9]|1[0-2])\/(0[1-9]|1\d|2\d|3[01])\/(19|20)\d{2}$/;
+let time_regex = /^(0[0-9]|1\d|2[0-3])\:(00)/;
+
+app.get("/", function (req, res) {
+        res.json({
+            output: "Homepage"
+        });
 });
 
-app.post("/hall", async function (req, res) {
-  try {
-    const connection = await mongodbclient.connect(URL);
-
-    const db = connection.db("hallbooking");
-
-    await db.collection("hallbooking").insertOne(req.body);
-
-    await connection.close();
-
+app.get("/getAllRooms", function (req, res) {
     res.json({
-      message: "added successfully",
+        output: rooms
     });
-  } catch (error) {
-    console.log(error);
-  }
 });
 
-app.get("/hall", async function (req, res) {
-  try {
-    const connection = await mongodbclient.connect(URL);
-
-    const db = connection.db("hallbooking");
-
-    console.log(req.body);
-
-    let audience = await db.collection("hallbooking").find().toArray();
-
-    await connection.close();
-
-    res.json(audience);
-  } catch (error) {
-    console.log(error);
-  }
+app.get("/getAllBookings", function (req, res) {
+    res.json({
+        output: bookings
+    });
 });
 
-app.get("/hall/:id", async function (req, res) {
-  try {
-    const connection = await mongodbclient.connect(URL);
+app.post("/createRoom", function (req, res) {
+    let room = {};
+    room.id = uniqid();
+    room.roomNo = roomNo;
+    room.bookings = [];
+    if(req.body.noSeats){room.noSeats = req.body.noSeats} 
 
-    const db = connection.db("hallbooking");
+    else{res.status(400).json({ 
+        output: 'Please add No of seats for Room'
+    })};
 
-    let hall = await db
-      .collection("hallbooking")
-      .findOne({ _id: mongodb.ObjectId(req.params.id) });
+    if(req.body.amenities){room.amenities = req.body.amenities} 
 
-    await connection.close();
+    else{res.status(400).json({ 
+        output: 'Please add all Amenities for Room in Array format'
+    })};
 
-    res.json(hall);
-  } catch (error) {
-    console.log(error);
-  }
+    if(req.body.price){room.price = req.body.price} 
+
+    else{res.status(400).json({ 
+        output: 'Please add price per hour for Room'
+    })};
+
+    rooms.push(room);
+    roomNo++;
+    res.status(200).json({ output: 'Room Creation Successfully'}) 
 });
 
-app.post("/customer", async function (req, res) {
-  try {
-    const connection = await mongodbclient.connect(URL);
-
-    const db = connection.db("hallbooking");
-
-    const date = new Date();
-
-    req.body.startdate = `${date.toDateString()}`;
-
-    req.body.starttime = `${date.getHours()}:${date.getMinutes()}`;
-
-    req.body.isdeleted = `false`;
-
-    const available_room = await db
-      .collection("hallbooking")
-      .findOne({ Status: "not booked" });
-
-    const a = await db
-      .collection("hallbooking")
-      .updateOne(
-        { _id: mongodb.ObjectId(available_room._id) },
-        { $set: { Status: "booked" } }
-      );
-
-    if (a) {
-      req.body.room_id = available_room._id;
-      await db.collection("customer").insertOne(req.body);
-
-      res.json({
-        message: "added successfully",
-      });
-    } else {
-      res.json({
-        message: "No available rooms",
-      });
+app.post("/createBooking", function (req, res) {
+    let booking = {};
+    booking.id = uniqid();
+    if(req.body.custName){booking.custName = req.body.custName} 
+    else{res.status(400).json({ output: 'Please add customer Name for booking.'})};
+    if(req.body.date){
+        if (date_regex.test(req.body.date)) {
+            booking.date = req.body.date
+        } else{
+            res.status(400).json({ output: 'Please add date in MM/DD/YYYY'})
+        }
+    } else{
+        res.status(400).json({ output: 'Please add date for booking.'})
     }
-    await connection.close();
-  } catch (error) {
-    res.status(404).json({
-      message: "Rooms Not found",
+
+    if(req.body.startTime){
+        if (time_regex.test(req.body.startTime)) {
+            booking.startTime = req.body.startTime
+        } else{
+            res.status(400).json({ output: 'Please add time in hh:min(24-hr format) where minutes should be 00 only'})
+        }
+    } else{
+        res.status(400).json({ output: 'Please add Starting time for booking.'})
+    }
+
+    if(req.body.endTime){
+        if (time_regex.test(req.body.endTime)) {
+            booking.endTime = req.body.endTime
+        } else{
+            res.status(400).json({ output: 'Please add time in hh:min(24-hr format) where minutes should be 00 only'})
+        }
+    } else{
+        res.status(400).json({ output: 'Please add Ending time for booking.'})
+    }
+
+    const availableRooms = rooms.filter(room => {
+        if(room.bookings.length == 0){
+            return true;
+        } else{
+            room.bookings.filter(book =>{
+                if((book.date == req.body.date) ){
+                    if((parseInt((book.startTime).substring(0, 1)) > parseInt((req.body.startTime).substring(0, 1)) ) && 
+                    (parseInt((book.startTime).substring(0, 1)) > parseInt((req.body.endTime).substring(0, 1)) ) ){ 
+                        if((parseInt((book.startTime).substring(0, 1)) < parseInt((req.body.startTime).substring(0, 1)) ) && 
+                          (parseInt((book.startTime).substring(0, 1)) < parseInt((req.body.endTime).substring(0, 1)) ) ){ 
+                            return true;
+                        }
+                    }
+                }
+                else{
+                    return true;
+                }
+            })
+
+        }
     });
-  }
+    if(availableRooms.length == 0){res.status(400).json({ output: 'No Available Rooms on Selected Date and Time'})}
+   else{
+    roomRec = availableRooms[0];
+   let count =0;
+   rooms.forEach(element => {
+       if(element.roomNo == roomRec.roomNo){
+        rooms[count].bookings.push({
+            custName: req.body.custName,
+            startTime: req.body.startTime,
+            endTime: req.body.endTime,
+            date: req.body.date
+        })
+       }
+       count++;
+   });
+   let bookingRec = req.body;
+   bookingRec.roomNo = roomRec.roomNo;
+   bookingRec.cost = parseInt(roomRec.price) * (parseInt((bookingRec.endTime).substring(0, 1)) - parseInt((bookingRec.startTime).substring(0, 1)));
+
+
+   bookings.push(bookingRec);
+   res.status(200).json({ output: 'Room Booking Successfully'}) 
+}
 });
-
-app.get("/customer", async function (req, res) {
- 
-  try {
-    const connection = await mongodbclient.connect(URL); 
-
-    const db = connection.db("hallbooking"); 
-
-    let customer = await db.collection("customer").find().toArray(); 
-
-    await connection.close();
-
-    res.json(customer);
-  } catch (error) {
-    console.log(error);
-  }
-});
-
-app.put("/customer/:room_id", async function (req, res) {
-  
-  try {
-    const connection = await mongodbclient.connect(URL);
-
-    const db = connection.db("hallbooking");
-
-    const room_status_update = await db
-      .collection("hallbooking")
-      .updateOne(
-        { _id: mongodb.ObjectId(req.params.room_id) },
-        { $set: { Status: "not booked" } }
-      );
-
-    var date = new Date();
-
-    const customer_delete = await db.collection("customer").updateOne(
-      { room_id: mongodb.ObjectId(req.params.room_id) },
-      {
-        $set: {
-          isdeleted: "true",
-          End_Date: date.toDateString(),
-          End_time: `${date.getHours()}:${date.getMinutes()}`,
-        },
-      }
-    );
-
-    await connection.close();
-
-    res.json({
-      message: "Hope you liked our services , Do visit us again 😊",
-    });
-  } catch (error) {
-    console.log(error);
-  }
-});
-
-app.get("/roomdata", async function (req, res) {
-  
-  try {
-    const connection = await mongodbclient.connect(URL);
-
-    const db = connection.db("hallbooking");
-
-    const pipeline = [
-      {
-        $lookup: {
-          from: "customer",
-          localField: "_id",
-          foreignField: "room_id",
-          as: "result",
-        },
-      },
-      {
-        $match: {
-          Status: "booked",
-        },
-      },
-      {
-        $project: {
-          Status: 1,
-          result: 1,
-        },
-      },
-    ];
-
-    const aggregate = await db
-      .collection("hallbooking")
-      .aggregate(pipeline)
-      .toArray();
-
-    res.json(aggregate);
-
-    await connection.close();
-  } catch (error) {
-    console.log(error);
-  }
-});
-
-app.get("/bookedcustomers", async function (req, res) {
-  
-  const connection = await mongodbclient.connect(URL);
-  const db = connection.db("hallbooking");
-
-  const find = await db
-    .collection("customer")
-    .find({ isdeleted: "false" })
-    .toArray();
-
-  res.json(find);
-
-  await connection.close();
-});
-
-app.listen(process.env.PORT || 5000, () =>
-  console.log("server running sucessfully")
-);
