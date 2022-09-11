@@ -111,13 +111,13 @@ app.post("/customer", async function (req, res) {
 });
 
 app.get("/customer", async function (req, res) {
-  // gets all customers details , both previous and current customers
+ 
   try {
-    const connection = await mongodbclient.connect(URL); //open the connection
+    const connection = await mongodbclient.connect(URL); 
 
-    const db = connection.db("hallbooking"); //select database
+    const db = connection.db("hallbooking"); 
 
-    let customer = await db.collection("customer").find().toArray(); //finding particular document
+    let customer = await db.collection("customer").find().toArray(); 
 
     await connection.close();
 
@@ -128,7 +128,7 @@ app.get("/customer", async function (req, res) {
 });
 
 app.put("/customer/:room_id", async function (req, res) {
-  //give room_id in /:id to update
+  
   try {
     const connection = await mongodbclient.connect(URL);
 
@@ -152,7 +152,7 @@ app.put("/customer/:room_id", async function (req, res) {
           End_time: `${date.getHours()}:${date.getMinutes()}`,
         },
       }
-    ); //Gives the end date and time during Checkout
+    );
 
     await connection.close();
 
@@ -165,7 +165,7 @@ app.put("/customer/:room_id", async function (req, res) {
 });
 
 app.get("/roomdata", async function (req, res) {
-  //retrieves booked room datas
+  
   try {
     const connection = await mongodbclient.connect(URL);
 
@@ -207,7 +207,7 @@ app.get("/roomdata", async function (req, res) {
 });
 
 app.get("/bookedcustomers", async function (req, res) {
-  //Retreives booked customers //note : customers end time is given only when they checkout
+  
   const connection = await mongodbclient.connect(URL);
   const db = connection.db("hallbooking");
 
